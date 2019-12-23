@@ -3,6 +3,10 @@ seed(100)
 from flask import Flask, render_template, request, make_response, redirect, url_for
 from models import User, db
 
+import uuid
+import hashlib
+
+
 db.create_all()
 
 app = Flask(__name__)
@@ -14,18 +18,28 @@ def login_get():
 def login_post():
     name = request.form.get("name")
     email = request.form.get("email")
-    user = User(name=name, email=email, secret_number=6)
+    password = request.form.get ("password")
+    password = hashlib.sha512(password.encode()).hexdigest()
+    print(password)
+    user = db.query(User).filter_by(email=email).first()
 
-    db.add(user)
-    db.commit()
+    if user is not None:
+        if user.password != password:
+            return "<h1>Wrong<h/1>"
+
+    else:
+        user = User(name=name, email=email, secret_number=randint(0,10), password=password, token=str(uuid.uuid4()))
+
+        db.add(user)
+        db.commit()
     response = make_response(redirect(url_for("index")))
-    response.set_cookie ("email", email)
+    response.set_cookie("token", user.token)
     return response
 
 @app.route("/")
 def index():
-    email = request.cookies.get("email")
-    user = db.query(User).filter_by(email=email).first()
+    token = request.cookies.get("token")
+    user = db.query(User).filter_by(token=token).first()
     if user is None:
         response = make_response(redirect(url_for(("login_get"))))
         return response
@@ -36,8 +50,8 @@ def index():
 #GET je po default, če ne nepišeš nič vzame get
 @app.route ("/", methods = ["POST"])
 def index_post():
-    email = request.cookies.get("email")
-    user = db.query(User).filter_by(email=email).first()
+    token = request.cookies.get("token")
+    user = db.query(User).filter_by(token=token).first()
     if user is None:
         response = make_response(redirect(url_for(("login_get"))))
         return response
@@ -58,8 +72,8 @@ def index_post():
 
 @app.route("/reset")
 def reset():
-    email = request.cookies.get("email")
-    user = db.query(User).filter_by(email=email).first()
+    token = request.cookies.get("token")
+    user = db.query(User).filter_by(token=token).first()
     if user is None:
         response = make_response(redirect(url_for(("login_get"))))
         return response
